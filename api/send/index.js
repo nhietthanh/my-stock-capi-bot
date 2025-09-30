@@ -16,11 +16,11 @@ export default async function handler(req, res) {
     }
 
     // Gửi telegram
-    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: process.env.TELEGRAM_CHAT_ID,
+        chat_id: process.env.CHAT_ID,
         text: `📊 Giá đóng cửa FPT hôm nay: ${lastClose}`
       })
     });
