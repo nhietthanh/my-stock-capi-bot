@@ -1,0 +1,16 @@
+name: Telegram Bot Cron
+
+on:
+  schedule:
+    - cron: "50 5 * * *" # 12:50 VN = 05:50 UTC
+  workflow_dispatch: # Cho phép chạy thủ công để test
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send message to Telegram
+        run: |
+          curl -X POST https://api.telegram.org/bot${{ secrets.7616798152:AAEbM4AtNKkwqO3vVK65iCJwN_rZOHcBBT8}}/sendMessage \
+          -d "chat_id=${{ secrets.-4939983155}}" \
+          -d "text=⏰ 12h50 rồi, bot báo cáo đây!"
