@@ -23,8 +23,11 @@ export default async function handler(req, res) {
     const { signal, message, lastClose, prevClose, changePercent } =
       await analyzeGold();
 
-    // luôn gửi telegram, kể cả NEUTRAL
-    await sendMessage(message);
+    if (signal === "BUY" || signal === "SELL") {
+      await sendMessage(message);
+    } else {
+      console.log("⏸ Không có tín hiệu rõ ràng → không gửi Telegram.");
+    }
 
     res.status(200).json({
       ok: true,
