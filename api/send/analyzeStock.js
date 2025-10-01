@@ -123,7 +123,8 @@
 
 import axios from "axios";
 import { RSI, MACD, StochasticRSI, BollingerBands } from "technicalindicators";
-import { RandomForestRegressor } from "ml-random-forest";
+import pkg from "ml-random-forest"; // Sửa import
+const { RandomForestRegressor } = pkg; // Destructuring
 
 export async function analyzeStock(symbol = "FPT") {
   const to = Math.floor(Date.now() / 1000);
@@ -219,7 +220,7 @@ export async function analyzeStock(symbol = "FPT") {
   let yearEndForecast = null;
   try {
     const { dataset, labels } = prepareRandomForestData(closes, volumes, rsiArr, macdArr);
-    if (dataset.length > 10) { // Cần đủ dữ liệu để huấn luyện
+    if (dataset.length > 20) { // Tăng yêu cầu tối thiểu để đảm bảo huấn luyện tốt
       const rf = new RandomForestRegressor({ nEstimators: 100, maxDepth: 10 });
       rf.train(dataset, labels);
 
@@ -232,6 +233,8 @@ export async function analyzeStock(symbol = "FPT") {
         macdArr[macdArr.length - 1]?.signal || 0,
       ];
       yearEndForecast = rf.predict([latestFeatures])[0];
+    } else {
+      console.warn("Không đủ dữ liệu để huấn luyện Random Forest");
     }
   } catch (err) {
     console.error("Random Forest prediction failed:", err.message);
