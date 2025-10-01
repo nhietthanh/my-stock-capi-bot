@@ -1,6 +1,6 @@
 // bot.js
 import TelegramBot from "node-telegram-bot-api";
-import { analyzeStock } from "./analyzeStock";
+import { analyzeStock } from "./analyzeStock.js";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
