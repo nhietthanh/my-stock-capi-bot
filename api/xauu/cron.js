@@ -1,4 +1,4 @@
-import { analyzeGold } from "./analyzeGold.js";
+import { analyzeGold } from "./analyzeGold";
 import fetch from "node-fetch";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
