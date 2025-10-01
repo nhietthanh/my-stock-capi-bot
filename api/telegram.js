@@ -4,7 +4,7 @@ import axios from "axios";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(200).json({ ok: true }); // Telegram cần trả về 200 nhanh
+    return res.status(200).json({ ok: true }); 
   }
 
   try {
