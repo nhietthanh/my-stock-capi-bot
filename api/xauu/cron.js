@@ -1,5 +1,5 @@
 import axios from "axios";
-import { analyzeGold } from "./analyzeGold";
+import { analyzeGold } from "./analyzeGold.js";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
