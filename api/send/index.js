@@ -1,33 +1,45 @@
+// api/fpt-history.js
 export default async function handler(req, res) {
+  const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  const CHAT_ID = process.env.CHAT_ID;
+
   try {
-    const from = Math.floor(new Date("2024-01-01").getTime() / 1000);
+    // Lấy thời gian hiện tại (Unix timestamp giây)
     const to = Math.floor(Date.now() / 1000);
+    const from = to - 365 * 24 * 60 * 60; // 1 năm trước
+    const countback = 330;
 
-    const response = await fetch(
-      `https://iboard.ssi.com.vn/dchart/api/history?symbol=FPT&resolution=D&from=${from}&to=${to}`
-    );
-    const data = await response.json();
+    const url = `https://chart-api.mbs.com.vn/pbRltCharts/chart/v2/history?symbol=FPT&resolution=1D&from=${from}&to=${to}&countback=${countback}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
 
-    const closePrices = data.c;
-    const lastClose = closePrices[closePrices.length - 1]; // giá đóng cửa mới nhất
-
-    if (!lastClose) {
-      throw new Error("Không tìm thấy giá đóng cửa FPT");
+    if (!data || data.s !== "ok" || !Array.isArray(data.c) || data.c.length === 0) {
+      throw new Error("Dữ liệu không hợp lệ từ MBS API");
     }
 
-    // Gửi telegram
-    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    const closeArr = data.c;
+    const lastClose = closeArr[closeArr.length - 1];
+
+    const nowVN = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+
+    const message = `📊 Báo cáo cuối phiên FPT  
+Giá đóng cửa: ${lastClose}  
+⏰ ${nowVN}`;
+
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: process.env.CHAT_ID,
-        text: `📊 Giá đóng cửa FPT hôm nay: ${lastClose}`
+        chat_id: CHAT_ID,
+        text: message
       })
     });
 
-    res.status(200).json({ message: "Đã gửi báo cáo FPT" });
+    return res.status(200).json({ ok: true, lastClose, message });
   } catch (err) {
-    console.error("❗ Lỗi:", err.message);
-    res.status(500).json({ error: `❗ Lỗi khi lấy dữ liệu FPT: ${err.message}` });
+    console.error("❗ Lỗi khi lấy từ MBS API:", err.message || err);
+    return res.status(500).json({
+      error: `❗ Lỗi khi lấy dữ liệu FPT: ${err.message || "unknown"}`
+    });
   }
 }
