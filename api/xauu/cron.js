@@ -1,6 +1,6 @@
 // cron.js  (Next.js API route: pages/api/cron.js hoặc api/cron.js trên Vercel)
 import axios from "axios";
-import { analyzeGold } from "./analyzeGold"; // nếu để ở vị trí khác, chỉnh path tương ứng
+import { analyzeGold } from "./analyzeGold.js"; // nếu để ở vị trí khác, chỉnh path tương ứng
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
