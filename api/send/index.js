@@ -3,7 +3,7 @@ import axios from "axios";
 import { RSI, MACD, StochasticRSI } from "technicalindicators";
 
 export default async function handler(req, res) {
-  const BOT_TOKEN = process.env.BOT_TOKEN;
+  const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
   const CHAT_ID = process.env.CHAT_ID;
 
   if (!BOT_TOKEN || !CHAT_ID) {
