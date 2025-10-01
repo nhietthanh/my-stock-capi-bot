@@ -1,4 +1,5 @@
-import analyzeStock from "./analyzeStock.js";
+import { analyzeStock } from "./send/analyzeStock.js";
+
 import axios from "axios";
 
 export default async function handler(req, res) {
