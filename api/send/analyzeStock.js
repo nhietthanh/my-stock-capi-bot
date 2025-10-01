@@ -121,9 +121,9 @@
 //   return message;
 // }
 
-// lib/analyzeStock.js
 import axios from "axios";
-import { RSI, MACD, StochasticRSI, BollingerBands } from "technicalindicators"; // Thêm BollingerBands
+import { RSI, MACD, StochasticRSI, BollingerBands } from "technicalindicators";
+import { RandomForestRegressor } from "ml-random-forest";
 
 export async function analyzeStock(symbol = "FPT") {
   const to = Math.floor(Date.now() / 1000);
@@ -132,15 +132,19 @@ export async function analyzeStock(symbol = "FPT") {
 
   const url = `https://chart-api.mbs.com.vn/pbRltCharts/chart/v2/history?symbol=${symbol}&resolution=1D&from=${from}&to=${to}&countback=${countback}`;
 
-  const resp = await axios.get(url, { timeout: 15000 });
-  const data = resp.data;
-
-  if (!data || data.s !== "ok" || !Array.isArray(data.c) || data.c.length === 0) {
-    throw new Error("Dữ liệu không hợp lệ từ MBS API");
+  let data;
+  try {
+    const resp = await axios.get(url, { timeout: 15000 });
+    data = resp.data;
+    if (!data || data.s !== "ok" || !Array.isArray(data.c) || data.c.length === 0) {
+      throw new Error(`Invalid data from MBS API: ${JSON.stringify(data)}`);
+    }
+  } catch (err) {
+    throw new Error(`Failed to fetch data from MBS API: ${err.message}`);
   }
 
   const closes = data.c.map(Number).filter((n) => !Number.isNaN(n));
-  const volumes = Array.isArray(data.v) ? data.v.map(Number) : [];
+  const volumes = Array.isArray(data.v) ? data.v.map(Number).filter((n) => !Number.isNaN(n)) : [];
 
   if (closes.length < 20) {
     throw new Error("Không đủ dữ liệu để tính chỉ báo (ít hơn 20 phiên).");
@@ -171,7 +175,7 @@ export async function analyzeStock(symbol = "FPT") {
   });
   const stochLast = stochArr.length ? stochArr[stochArr.length - 1] : null;
 
-  // Bollinger Bands (mới thêm cho support/resistance)
+  // Bollinger Bands
   const bbArr = BollingerBands.calculate({
     period: 20,
     values: closes,
@@ -191,32 +195,52 @@ export async function analyzeStock(symbol = "FPT") {
       ? volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
       : volumes.reduce((a, b) => a + b, 0) / Math.max(1, volumes.length);
 
-  // Hàm Linear Regression đơn giản (mới thêm cho dự báo giá cuối năm)
-  function linearRegressionForecast(closes, forecastDays = 252) { // 252 ngày giao dịch/năm
-    const n = closes.length;
-    if (n < 2) return null;
+  // Random Forest để dự báo giá cuối năm
+  function prepareRandomForestData(closes, volumes, rsiArr, macdArr) {
+    const dataset = [];
+    const labels = [];
+    const lookback = 14; // Sử dụng 14 phiên gần nhất làm đặc trưng
 
-    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-    for (let i = 0; i < n; i++) {
-      sumX += i;
-      sumY += closes[i];
-      sumXY += i * closes[i];
-      sumX2 += i * i;
+    for (let i = lookback; i < closes.length; i++) {
+      const features = [
+        closes[i - 1], // Giá phiên trước
+        volumes[i - 1] / 1_000_000, // Khối lượng phiên trước (chuẩn hóa)
+        rsiArr[i - lookback] || 50, // RSI (nếu null, dùng 50)
+        macdArr[i - lookback]?.MACD || 0, // MACD (nếu null, dùng 0)
+        macdArr[i - lookback]?.signal || 0, // MACD signal
+      ];
+      dataset.push(features);
+      labels.push(closes[i]); // Dự báo giá phiên hiện tại
     }
 
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
-
-    const futureX = n + forecastDays - 1; // Dự báo đến ngày cuối năm
-    return slope * futureX + intercept;
+    return { dataset, labels };
   }
 
-  const yearEndForecast = linearRegressionForecast(closes); // Dự báo giá cuối năm
+  let yearEndForecast = null;
+  try {
+    const { dataset, labels } = prepareRandomForestData(closes, volumes, rsiArr, macdArr);
+    if (dataset.length > 10) { // Cần đủ dữ liệu để huấn luyện
+      const rf = new RandomForestRegressor({ nEstimators: 100, maxDepth: 10 });
+      rf.train(dataset, labels);
+
+      // Dự báo giá cuối năm
+      const latestFeatures = [
+        closes[closes.length - 1],
+        volumes[volumes.length - 1] / 1_000_000,
+        rsiArr[rsiArr.length - 1] || 50,
+        macdArr[macdArr.length - 1]?.MACD || 0,
+        macdArr[macdArr.length - 1]?.signal || 0,
+      ];
+      yearEndForecast = rf.predict([latestFeatures])[0];
+    }
+  } catch (err) {
+    console.error("Random Forest prediction failed:", err.message);
+  }
 
   // Nhận định
   const rsiComment =
     rsi === null
-      ? "N/A"
+      ? "Không đủ dữ liệu để tính RSI"
       : rsi > 70
       ? "→ vùng quá mua, rủi ro điều chỉnh"
       : rsi < 30
@@ -225,14 +249,14 @@ export async function analyzeStock(symbol = "FPT") {
 
   const macdComment =
     macdLast === null
-      ? "N/A"
+      ? "Không đủ dữ liệu để tính MACD"
       : macdLast.MACD > macdLast.signal
       ? "→ tín hiệu tăng"
       : "→ tín hiệu giảm";
 
   const stochComment =
     stochLast === null
-      ? "N/A"
+      ? "Không đủ dữ liệu để tính Stochastic RSI"
       : stochLast.k < 20 && stochLast.d < 20
       ? "→ vùng quá bán, có thể hồi kỹ thuật"
       : stochLast.k > 80 && stochLast.d > 80
@@ -253,12 +277,18 @@ export async function analyzeStock(symbol = "FPT") {
       ? "Rủi ro kiểm định lại hỗ trợ."
       : "Tiếp tục quan sát.";
 
-  // Nhận định mới cho giá mua/chốt lời và dự báo năm
-  const supportComment = supportPrice ? `Giá mua vào gợi ý: ${supportPrice.toFixed(2)} (Lower Bollinger Band - hỗ trợ tiềm năng)` : "N/A";
-  const resistanceComment = resistancePrice ? `Giá chốt lời gợi ý: ${resistancePrice.toFixed(2)} (Upper Bollinger Band - kháng cự tiềm năng)` : "N/A";
-  const yearForecastComment = yearEndForecast ? `Dự báo giá cuối năm: ${yearEndForecast.toFixed(2)} (dựa trên xu hướng tuyến tính lịch sử)` : "N/A";
+  // Nhận định giá
+  const supportComment = supportPrice
+    ? `Giá mua vào gợi ý: ${supportPrice.toFixed(2)} (Lower Bollinger Band - hỗ trợ tiềm năng)`
+    : "Không đủ dữ liệu để tính giá hỗ trợ";
+  const resistanceComment = resistancePrice
+    ? `Giá chốt lời gợi ý: ${resistancePrice.toFixed(2)} (Upper Bollinger Band - kháng cự tiềm năng)`
+    : "Không đủ dữ liệu để tính giá kháng cự";
+  const yearForecastComment = yearEndForecast
+    ? `Dự báo giá cuối năm: ${yearEndForecast.toFixed(2)} (dựa trên Random Forest)`
+    : "Không đủ dữ liệu để dự báo giá cuối năm";
 
-  // Format message (thêm phần mới)
+  // Format message
   const message = `📊 Phân tích kỹ thuật ${symbol}
 
 - Giá đóng cửa: ${lastClose.toFixed(2)} (${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%)
@@ -281,7 +311,7 @@ ${symbol} đang ${trendSentence}. ${shortForecast}
 - ${resistanceComment}
 - ${yearForecastComment}
 
-*Lưu ý: Đây chỉ là phân tích kỹ thuật, không phải lời khuyên đầu tư. Hãy tham khảo chuyên gia.*
+*Lưu ý: Đây chỉ là phân tích kỹ thuật, không phải lời khuyên đầu tư. Hãy tham khảo ý kiến chuyên gia tài chính.*
 
 ⏰ ${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`;
 
